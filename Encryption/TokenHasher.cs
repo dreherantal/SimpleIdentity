@@ -91,10 +91,8 @@ public class TokenHasher
 
             return headerObject;
         }
-        catch (Exception e)
+        catch
         {
-            Console.WriteLine("Header exception handled.\n" + e.Message);
-
             return null;
         }
 
@@ -109,9 +107,8 @@ public class TokenHasher
 
             return payload;
         }
-        catch (Exception e)
+        catch
         {
-            Console.WriteLine("Payload exception handled.\n" + e.Message);
             return null;
         }
 
@@ -126,11 +123,9 @@ public class TokenHasher
 
             return signatureBytes;
         }
-        catch (Exception e)
+        catch
         {
-            Console.WriteLine("Signature base64 decode exception handled.\n" + e.Message);
             byte[] signatureBytes = [];
-            System.Console.WriteLine(signatureBytes.Length);
             return signatureBytes;
         }
 
@@ -146,12 +141,19 @@ public class TokenHasher
 
         if (segments.Length != 3)
         {
-            JWTresult.ErrorMessage = "JWT segments count failure. It should contain three base64 encoded segments. header.payload.signature";
+            JWTresult.ErrorMessage = "JWT segments count failure. It should contain three base64 encoded segments separated by a dot: header.payload.signature";
 
             return JWTresult;
         }
 
+        if (segments[0].Length == 0 || segments[1].Length == 0 || segments[2].Length == 0)
+        {
+            JWTresult.ErrorMessage = "Missing some of: header, payload or signature";
+            
+            return JWTresult;
+        }
 
+      
         var header = GetHeaderFromBase64String(segments[0]);
         var payload = GetPayloadFromBase64String(segments[1]);
 
@@ -204,7 +206,7 @@ public class TokenHasher
         if (CryptographicOperations.FixedTimeEquals(hashToValidate, signatureBytes) == true)
         {
 
-            JWTresult.isValid = true;
+            JWTresult.IsValid = true;
             JWTresult.UserID = (int)payload.uid;
 
             return JWTresult;
@@ -212,7 +214,6 @@ public class TokenHasher
         else
         {
 
-            JWTresult.isValid = false;
             JWTresult.ErrorMessage = "Signature verification failed.";
 
             return JWTresult;

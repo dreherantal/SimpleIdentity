@@ -10,7 +10,20 @@ public class AuthEndpoint : IEndpointFilter
 
     )
     {
-        Console.WriteLine("auth endpoint executing");
+
+        var endpointMetadataCollection = context.HttpContext.GetEndpoint()?.Metadata;
+        bool? IsLoginAnonymous = endpointMetadataCollection?.GetMetadata<EndpointRequiresAuth>()?.IsAnonymous;
+        Console.WriteLine(IsLoginAnonymous);
+
+        if (IsLoginAnonymous is true && IsLoginAnonymous is not null)
+        {
+            return await next(context);
+
+        }
+
+
+        Console.WriteLine("auth endpoint executing (not anonymous login)");
+
         string? auth = context.HttpContext.Request.Headers.Authorization;
 
         if (auth != null)
@@ -19,10 +32,11 @@ public class AuthEndpoint : IEndpointFilter
 
             JWTValidationResult ValidationResult = TokenHasher.ValidateJWT(bearer);
 
-            if (ValidationResult.isValid == true)
+            if (ValidationResult.IsValid == true)
             {
 
                 context.HttpContext.Items["UserId"] = ValidationResult.UserID;
+
 
                 return await next(context);
 

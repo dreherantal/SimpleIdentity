@@ -2,14 +2,20 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SimpleIdentity.DTOs;
 using SimpleIdentity.Encryption;
-using SimpleIdentity.EndpointFilters;
+using SimpleIdentity.Middlewares;
 using SimpleIdentity.Models;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration.ReadFrom.Configuration(context.Configuration);
+});
+
 
 builder.Services.AddDbContext<UsersDbContext>(options =>
       options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -28,20 +34,22 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
+app.UseRouting();
+app.UseMiddleware<AuthMiddleware>();
+app.UseEndpoints(e => {});
+
 
 app.MapGet("/validate", (HttpContext context) =>
 {
 
-    //int UserId = (int)context.Items["UserId"];
-    
-    var UserId = context.Items["UserId"];
-    
+    int? UserId = (int?)context.Items["UserId"];
 
-    System.Console.WriteLine("Validated UserId:" + UserId);
+    System.Console.WriteLine("Validated UserId: " + UserId);
+    return Results.Ok();
 
 })
-.AddEndpointFilter<AuthEndpoint>()
+//.AddEndpointFilter<AuthEndpoint>()
 .WithOpenApi();
 
 
@@ -73,7 +81,8 @@ app.MapPost("/register", async (UsersDbContext db, RegisterDTO registerDTO) =>
     return Results.Created();
 
 }
-);
+)
+.WithMetadata(new EndpointRequiresAuth { IsAnonymous = true });
 
 app.MapPost("/login", async (UsersDbContext db, LoginDTO loginDTO) =>
 {
@@ -96,20 +105,20 @@ app.MapPost("/login", async (UsersDbContext db, LoginDTO loginDTO) =>
     }
 
 }
-);
+)
+.WithMetadata(new EndpointRequiresAuth { IsAnonymous = true });
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
-
-
 public class JWTValidationResult
 {
-    public bool isValid { get; set; } = false;
+    public bool IsValid { get; set; } = false;
     public int UserID { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
 
+}
+
+public class EndpointRequiresAuth
+{
+    public required bool IsAnonymous { get; set; }
 }

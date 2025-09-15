@@ -1,5 +1,3 @@
-using System;
-
 namespace SimpleIdentity.DTOs;
 
 public class RegisterDTO
