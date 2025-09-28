@@ -5,6 +5,8 @@ using SimpleIdentity.Encryption;
 using SimpleIdentity.Middlewares;
 using SimpleIdentity.Models;
 using Serilog;
+using SimpleIdentity.Endpoints.Public;
+using SimpleIdentity.Endpoints.Protected;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,7 +20,11 @@ builder.Host.UseSerilog((context, services, configuration) =>
 
 
 builder.Services.AddDbContext<UsersDbContext>(options =>
-      options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+      options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"), sqlServerOptionsAction: sqlOptions =>
+      {
+          sqlOptions.EnableRetryOnFailure(
+          maxRetryCount: 3);
+      }));
 
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
@@ -37,76 +43,10 @@ if (app.Environment.IsDevelopment())
 //app.UseHttpsRedirection();
 app.UseRouting();
 app.UseMiddleware<AuthMiddleware>();
-app.UseEndpoints(e => {});
+app.UseEndpoints(e => { });
 
-
-app.MapGet("/validate", (HttpContext context) =>
-{
-
-    int? UserId = (int?)context.Items["UserId"];
-
-    System.Console.WriteLine("Validated UserId: " + UserId);
-    return Results.Ok();
-
-})
-//.AddEndpointFilter<AuthEndpoint>()
-.WithOpenApi();
-
-
-app.MapPost("/register", async (UsersDbContext db, RegisterDTO registerDTO) =>
-{
-    var user = DTOTools.RegisterDTOtoUser(registerDTO);
-    db.Users.Add(user);
-
-    try
-    {
-        await db.SaveChangesAsync();
-    }
-    catch (DbUpdateException x) when (x.InnerException is SqlException inner && (inner.Number == 2627 || inner.Number == 2601))
-    {
-
-        var result = await db.Users.FirstOrDefaultAsync(x => x.Email == user.Email);
-
-        if (result != null)
-        {
-            return Results.Conflict($"Email '{user.Email}' already registered. Please use another one to register.");
-        }
-
-    }
-    catch
-    {
-        throw;
-
-    }
-    return Results.Created();
-
-}
-)
-.WithMetadata(new EndpointRequiresAuth { IsAnonymous = true });
-
-app.MapPost("/login", async (UsersDbContext db, LoginDTO loginDTO) =>
-{
-    var result = await db.Users.FirstOrDefaultAsync(x => x.Email == loginDTO.Email.ToLower());
-
-    if (result == null)
-    {
-        return Results.NotFound($"Email not registered.");
-    }
-
-    if (SecretHasher.Verify(loginDTO.Password, result.PasswordHash))
-    {
-
-        return Results.Json(new { bearer = $"{TokenHasher.CreateJWT(result.Id)}" });
-
-    }
-    else
-    {
-        return Results.Unauthorized();
-    }
-
-}
-)
-.WithMetadata(new EndpointRequiresAuth { IsAnonymous = true });
+app.RegisterIdentityPublicEndpoints();
+app.RegisterIdentityProtectedEndpoints();
 
 app.Run();
 
